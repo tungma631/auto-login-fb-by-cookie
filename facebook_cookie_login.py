@@ -328,6 +328,67 @@ def extract_facebook_cookies(raw_info: str) -> dict[str, str]:
     return cookies
 
 
+def get_debugger_websocket_url(start_data: dict[str, Any]) -> str:
+    websocket_url = str(start_data.get("websocket_debugging_url") or "").strip()
+    if websocket_url:
+        return websocket_url
+    port = start_data.get("remote_debugging_port")
+    if not port and start_data.get("remote_debugging_address"):
+        port = str(start_data["remote_debugging_address"]).rsplit(":", 1)[-1]
+    if not port:
+        raise AutomationError("GPM không trả về địa chỉ Chrome DevTools")
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=5) as response:
+            payload = json.load(response)
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise AutomationError(f"không lấy được Chrome DevTools WebSocket: {exc}") from exc
+    websocket_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
+    if not websocket_url:
+        raise AutomationError("Chrome DevTools không trả về webSocketDebuggerUrl")
+    return websocket_url
+
+
+def import_cookies_via_cdp(start_data: dict[str, Any], raw_info: str) -> None:
+    try:
+        import websocket
+    except ImportError as exc:
+        raise AutomationError("thiếu websocket-client; chạy pip install -r requirements.txt") from exc
+
+    cookies = extract_facebook_cookies(raw_info)
+    cdp_cookies = [
+        {"name": name, "value": value, "domain": ".facebook.com", "path": "/", "secure": True}
+        for name, value in cookies.items()
+    ]
+    websocket_url = get_debugger_websocket_url(start_data)
+    connection = None
+    try:
+        connection = websocket.create_connection(websocket_url, timeout=10, suppress_origin=True)
+        command_id = 1
+        connection.send(
+            json.dumps(
+                {
+                    "id": command_id,
+                    "method": "Storage.setCookies",
+                    "params": {"cookies": cdp_cookies},
+                }
+            )
+        )
+        while True:
+            response = json.loads(connection.recv())
+            if response.get("id") != command_id:
+                continue
+            if response.get("error"):
+                raise AutomationError(f"Chrome DevTools từ chối cookie: {response['error']}")
+            break
+    except AutomationError:
+        raise
+    except Exception as exc:
+        raise AutomationError(f"không nhập được cookie qua Chrome DevTools: {exc}") from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
 def import_cookies_directly(driver, raw_info: str, settle_seconds: float) -> None:
     cookies = extract_facebook_cookies(raw_info)
     driver.get("https://www.facebook.com/")
@@ -438,25 +499,36 @@ def main() -> int:
             print(f"[{index}/{len(matched)}] {row.profile_name}: đang mở profile...")
             try:
                 start_data = client.start(profile_id)
-                driver = attach_driver(start_data)
+                cdp_error = None
                 try:
-                    import_cookies_directly(driver, row.info, args.settle_seconds)
-                except AutomationError as direct_error:
-                    print(f"[WARN] {row.profile_name}: nhập trực tiếp thất bại ({direct_error}), thử extension...")
+                    import_cookies_via_cdp(start_data, row.info)
+                except AutomationError as exc:
+                    cdp_error = exc
+                driver = attach_driver(start_data)
+                if cdp_error is None:
+                    print(f"[INFO] {row.profile_name}: đã nhập cookie qua Chrome DevTools")
                     driver.get("https://www.facebook.com/")
+                    time.sleep(args.settle_seconds)
+                else:
+                    print(f"[WARN] {row.profile_name}: CDP thất bại ({cdp_error}), thử Selenium...")
                     try:
-                        extension_id = discover_extension_id(driver)
-                    except AutomationError:
-                        # GPM trả session cache nếu profile đã mở; khởi động lại để nhận --load-extension.
-                        driver.service.stop()
-                        driver = None
-                        client.stop(profile_id)
-                        time.sleep(2)
-                        start_data = client.start(profile_id, extension_path)
-                        driver = attach_driver(start_data)
+                        import_cookies_directly(driver, row.info, args.settle_seconds)
+                    except AutomationError as direct_error:
+                        print(f"[WARN] {row.profile_name}: Selenium thất bại ({direct_error}), thử extension...")
                         driver.get("https://www.facebook.com/")
-                        extension_id = discover_extension_id(driver)
-                    import_with_extension(driver, extension_id, row.info, args.settle_seconds)
+                        try:
+                            extension_id = discover_extension_id(driver)
+                        except AutomationError:
+                            # GPM trả session cache nếu profile đã mở; khởi động lại để nhận --load-extension.
+                            driver.service.stop()
+                            driver = None
+                            client.stop(profile_id)
+                            time.sleep(2)
+                            start_data = client.start(profile_id, extension_path)
+                            driver = attach_driver(start_data)
+                            driver.get("https://www.facebook.com/")
+                            extension_id = discover_extension_id(driver)
+                        import_with_extension(driver, extension_id, row.info, args.settle_seconds)
                 ok, detail = verify_login(driver)
                 if ok:
                     open_post_login_tabs(driver)
