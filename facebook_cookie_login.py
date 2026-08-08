@@ -101,7 +101,7 @@ def api_candidates(requested_url: str) -> list[str]:
 
 
 class GpmClient:
-    def __init__(self, base_url: str, timeout: int = 30) -> None:
+    def __init__(self, base_url: str, timeout: float = 60) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
@@ -113,7 +113,7 @@ class GpmClient:
             client = cls(candidate, timeout=1.5)
             try:
                 client.get("profiles")
-                return client
+                return cls(candidate, timeout=60)
             except AutomationError as exc:
                 errors.append(f"{candidate}: {exc}")
         raise AutomationError(
@@ -159,10 +159,21 @@ class GpmClient:
             params = {"win_scale": "0.8"}
             if extension_path:
                 params["addination_args"] = f'--load-extension="{extension_path}"'
-        return self.get(
-            f"profiles/start/{urllib.parse.quote(profile_id)}",
-            params,
-        )
+        last_error: AutomationError | None = None
+        for attempt in range(1, 4):
+            try:
+                return self.get(
+                    f"profiles/start/{urllib.parse.quote(profile_id)}",
+                    params,
+                )
+            except AutomationError as exc:
+                last_error = exc
+                if "Không kết nối được GPM API" not in str(exc) or attempt == 3:
+                    raise
+                delay = attempt * 5
+                print(f"[WARN] GPM API phản hồi chậm; thử mở profile lại sau {delay} giây ({attempt}/3)")
+                time.sleep(delay)
+        raise last_error or AutomationError("Không mở được profile GPM")
 
     def stop(self, profile_id: str) -> None:
         action = "close" if self.base_url.endswith("/api/v3") else "stop"
@@ -354,15 +365,19 @@ def get_debugger_websocket_url(start_data: dict[str, Any]) -> str:
         port = str(start_data["remote_debugging_address"]).rsplit(":", 1)[-1]
     if not port:
         raise AutomationError("GPM không trả về địa chỉ Chrome DevTools")
-    try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=5) as response:
-            payload = json.load(response)
-    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise AutomationError(f"không lấy được Chrome DevTools WebSocket: {exc}") from exc
-    websocket_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
-    if not websocket_url:
-        raise AutomationError("Chrome DevTools không trả về webSocketDebuggerUrl")
-    return websocket_url
+    deadline = time.monotonic() + 20
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=3) as response:
+                payload = json.load(response)
+            websocket_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
+            if websocket_url:
+                return websocket_url
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            last_error = exc
+        time.sleep(1)
+    raise AutomationError(f"không lấy được Chrome DevTools WebSocket sau 20 giây: {last_error}")
 
 
 def import_cookies_via_cdp(start_data: dict[str, Any], raw_info: str) -> None:
@@ -378,8 +393,18 @@ def import_cookies_via_cdp(start_data: dict[str, Any], raw_info: str) -> None:
     ]
     websocket_url = get_debugger_websocket_url(start_data)
     connection = None
+    deadline = time.monotonic() + 20
+    last_connection_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            connection = websocket.create_connection(websocket_url, timeout=5, suppress_origin=True)
+            break
+        except Exception as exc:
+            last_connection_error = exc
+            time.sleep(1)
+    if connection is None:
+        raise AutomationError(f"không kết nối được Chrome DevTools sau 20 giây: {last_connection_error}")
     try:
-        connection = websocket.create_connection(websocket_url, timeout=10, suppress_origin=True)
         command_id = 1
         connection.send(
             json.dumps(
@@ -461,6 +486,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api", default=DEFAULT_API, help="GPM API URL; mặc định tự dò bản mới/cũ")
     parser.add_argument("--profile", action="append", help="Chỉ chạy profile này; có thể dùng nhiều lần")
     parser.add_argument("--settle-seconds", type=float, default=3.0)
+    parser.add_argument(
+        "--between-profiles",
+        type=float,
+        default=3.0,
+        help="Số giây nghỉ giữa hai profile để GPM ổn định (mặc định: 3)",
+    )
     parser.add_argument("--stop-after", action="store_true", help="Đóng profile sau khi xử lý")
     parser.add_argument("--dry-run", action="store_true", help="Chỉ kiểm tra CSV và ghép tên profile")
     return parser
@@ -570,6 +601,8 @@ def main() -> int:
                         client.stop(profile_id)
                     except Exception as exc:
                         print(f"[WARN] {row.profile_name}: không đóng được profile: {exc}")
+            if index < len(matched) and args.between_profiles > 0:
+                time.sleep(args.between_profiles)
 
         print(f"Hoàn tất: {successes}/{len(matched)} profile đăng nhập thành công")
         return 0 if successes == len(matched) and not problems else 1
