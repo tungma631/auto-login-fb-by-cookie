@@ -235,7 +235,17 @@ def attach_driver(start_data: dict[str, Any]):
         raise AutomationError("GPM không trả về remote_debugging_port/driver_path")
     options = webdriver.ChromeOptions()
     options.debugger_address = f"127.0.0.1:{port}"
-    driver = webdriver.Chrome(service=Service(str(driver_path)), options=options)
+    deadline = time.monotonic() + 20
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            driver = webdriver.Chrome(service=Service(str(driver_path)), options=options)
+            break
+        except Exception as exc:
+            last_error = exc
+            time.sleep(1)
+    else:
+        raise AutomationError(f"Không kết nối được browser GPM sau 20 giây: {last_error}")
     switch_to_page(driver)
     return driver
 
@@ -301,6 +311,43 @@ def import_with_extension(driver, extension_id: str, raw_info: str, settle_secon
     )
     wait.until(EC.element_to_be_clickable((By.ID, "btnImportCookie"))).click()
     time.sleep(settle_seconds)
+    driver.get("https://www.facebook.com/")
+    time.sleep(settle_seconds)
+
+
+def extract_facebook_cookies(raw_info: str) -> dict[str, str]:
+    candidates = [part.strip() for part in raw_info.split("|") if "c_user=" in part]
+    cookie_text = candidates[-1] if candidates else raw_info.strip()
+    cookies: dict[str, str] = {}
+    for part in cookie_text.split(";"):
+        name, separator, value = part.strip().partition("=")
+        if separator and name and value:
+            cookies[name.strip()] = value.strip()
+    if not cookies.get("c_user"):
+        raise AutomationError("không tìm thấy c_user trong chuỗi Infor")
+    return cookies
+
+
+def import_cookies_directly(driver, raw_info: str, settle_seconds: float) -> None:
+    cookies = extract_facebook_cookies(raw_info)
+    driver.get("https://www.facebook.com/")
+    driver.delete_all_cookies()
+    imported = 0
+    for name, value in cookies.items():
+        try:
+            driver.add_cookie(
+                {
+                    "name": name,
+                    "value": value,
+                    "domain": ".facebook.com",
+                    "path": "/",
+                }
+            )
+            imported += 1
+        except Exception as exc:
+            print(f"[WARN] không nhập được cookie '{name}': {exc}")
+    if not imported:
+        raise AutomationError("không nhập được cookie Facebook nào")
     driver.get("https://www.facebook.com/")
     time.sleep(settle_seconds)
 
@@ -390,22 +437,26 @@ def main() -> int:
             driver = None
             print(f"[{index}/{len(matched)}] {row.profile_name}: đang mở profile...")
             try:
-                start_data = client.start(profile_id, extension_path)
+                start_data = client.start(profile_id)
                 driver = attach_driver(start_data)
-                driver.get("https://www.facebook.com/")
                 try:
-                    extension_id = discover_extension_id(driver)
-                except AutomationError:
-                    # GPM trả session cache nếu profile đã mở; khởi động lại để nhận --load-extension.
-                    driver.service.stop()
-                    driver = None
-                    client.stop(profile_id)
-                    time.sleep(2)
-                    start_data = client.start(profile_id, extension_path)
-                    driver = attach_driver(start_data)
+                    import_cookies_directly(driver, row.info, args.settle_seconds)
+                except AutomationError as direct_error:
+                    print(f"[WARN] {row.profile_name}: nhập trực tiếp thất bại ({direct_error}), thử extension...")
                     driver.get("https://www.facebook.com/")
-                    extension_id = discover_extension_id(driver)
-                import_with_extension(driver, extension_id, row.info, args.settle_seconds)
+                    try:
+                        extension_id = discover_extension_id(driver)
+                    except AutomationError:
+                        # GPM trả session cache nếu profile đã mở; khởi động lại để nhận --load-extension.
+                        driver.service.stop()
+                        driver = None
+                        client.stop(profile_id)
+                        time.sleep(2)
+                        start_data = client.start(profile_id, extension_path)
+                        driver = attach_driver(start_data)
+                        driver.get("https://www.facebook.com/")
+                        extension_id = discover_extension_id(driver)
+                    import_with_extension(driver, extension_id, row.info, args.settle_seconds)
                 ok, detail = verify_login(driver)
                 if ok:
                     open_post_login_tabs(driver)
