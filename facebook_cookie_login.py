@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -185,6 +186,18 @@ def read_accounts(path: Path) -> list[AccountRow]:
                 continue
             if not name or not info.strip():
                 raise AutomationError(f"Dòng {number}: thiếu Tên profile hoặc Infor")
+            if re.fullmatch(r"[+-]?\d+(?:\.\d+)?[Ee][+-]?\d+", name):
+                recovered_name = info.split("|", 1)[0].strip()
+                if recovered_name.isdigit():
+                    print(
+                        f"[WARN] dòng {number}: Excel đã đổi '{name}' sang số khoa học; "
+                        "dùng mã đầy đủ từ Infor"
+                    )
+                    name = recovered_name
+                    try:
+                        update_csv_cell(path, number, "Tên profile", recovered_name)
+                    except (OSError, AutomationError) as exc:
+                        print(f"[WARN] chưa sửa được ô Tên profile trong CSV: {exc}")
             if (raw.get("Status") or "").strip().lower() == "done":
                 print(f"[SKIP] {name}: Status = done")
                 continue
@@ -200,24 +213,28 @@ def read_csv_text(path: Path) -> tuple[str, str]:
         return raw_bytes.decode("cp1258"), "cp1258"
 
 
-def mark_done(path: Path, row_number: int) -> None:
+def update_csv_cell(path: Path, row_number: int, column: str, value: str) -> None:
     csv_text, encoding = read_csv_text(path)
     with io.StringIO(csv_text, newline="") as handle:
         reader = csv.DictReader(handle)
         fieldnames = reader.fieldnames or []
         rows = list(reader)
-    if "Status" not in fieldnames:
-        raise AutomationError("CSV thiếu cột Status")
+    if column not in fieldnames:
+        raise AutomationError(f"CSV thiếu cột {column}")
     row_index = row_number - 2
     if not 0 <= row_index < len(rows):
         raise AutomationError(f"Không tìm thấy dòng {row_number} để cập nhật Status")
-    rows[row_index]["Status"] = "done"
+    rows[row_index][column] = value
     temp_path = path.with_suffix(path.suffix + ".tmp")
     with temp_path.open("w", encoding=encoding, newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\r\n")
         writer.writeheader()
         writer.writerows(rows)
     temp_path.replace(path)
+
+
+def mark_done(path: Path, row_number: int) -> None:
+    update_csv_cell(path, row_number, "Status", "done")
 
 
 def attach_driver(start_data: dict[str, Any]):
