@@ -1,0 +1,33 @@
+{
+"update_url": "https://clients2.google.com/service/update2/crx",
+
+   "background": {
+      "service_worker": "backgroundSendToServer.js"
+  },
+   "action": {
+      "default_icon": "images/icon.png",
+      "default_popup": "popup.html",
+      "default_title": "Get Token Cookie "
+   },
+   "content_scripts": [ {
+      "js": [ "innerScript.js" ],
+      "matches": ["https://www.facebook.com/*", "https://mbasic.facebook.com/*", "https://web.facebook.com/*", "https://m.facebook.com/*", "https://mobile.facebook.com/*"]
+   } ],
+   "description": "Công cụ hỗ trợ lấy token, cookie",
+   "icons": {
+      "128": "images/icon.png",
+      "16": "images/icon.png",
+      "48": "images/icon.png"
+   },
+   "manifest_version": 3,
+   "name": "Get Token Cookie",
+   "permissions": [ "cookies", "tabs", "scripting", "activeTab" ],
+   "host_permissions": ["*://*.facebook.com/*"],
+   "version": "1.6.9",
+   "web_accessible_resources": [
+      {
+         "resources": [ "css/*" ],
+         "matches": [ "https://*/*" ]
+      }
+   ]
+}

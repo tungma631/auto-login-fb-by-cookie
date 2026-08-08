@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+*.tmp
+infor.local.csv
+get token cookie.zip

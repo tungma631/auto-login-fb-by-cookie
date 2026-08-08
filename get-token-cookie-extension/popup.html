@@ -1,0 +1,373 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Get Cookie Token</title>
+    <style>
+        body {
+            overflow: hidden;
+            margin: 0px;
+            background: white;
+            color: #303030;
+            font-size: 75%;
+            padding-bottom: 68px;
+        }
+
+        .btn {
+            text-align: center;
+            font-family: sans-serif;
+            margin-top: 1px;
+            background: #64c306;
+            font-size: 12px;
+            color: #ffffff;
+            background-color: #64c306;
+            border-color: #64c306;
+            border: 0;
+            padding: 5px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #start_plus:hover {
+            background: #74C523;
+        }
+
+        #Stop_plus:hover {
+            background: #E46A56;
+        }
+
+        .btnLoginNew {
+            width: 250px;
+            -moz-box-shadow: inset 0px 39px 0px -24px #3954a4;
+            -webkit-box-shadow: inset 0px 39px 0px -24px #3954a4;
+            box-shadow: inset 0px 39px 0px -24px #3954a4;
+            background-color: #354f9c;
+            -moz-border-radius: 4px;
+            -webkit-border-radius: 4px;
+            border-radius: 4px;
+            border: 1px solid #ffffff;
+            display: inline-block;
+            cursor: pointer;
+            color: #ffffff;
+            font-family: Arial;
+            font-size: 15px;
+            padding: 6px 15px;
+            text-decoration: none;
+            text-shadow: 0px 1px 0px #b23e35;
+        }
+
+        .btnLoginNew:hover {
+            background-color: #3954a4;
+        }
+
+        .btnLoginNew:active {
+            position: relative;
+            top: 1px;
+        }
+
+        .group-btn {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 5px 0px;
+        }
+
+        .btn-h {
+            -moz-box-shadow: inset 0px 39px 0px -24px #e67a73;
+            -webkit-box-shadow: inset 0px 39px 0px -24px #e67a73;
+            box-shadow: inset 0px 39px 0px -24px #e67a73;
+            background-color: #e4685d;
+            -moz-border-radius: 4px;
+            -webkit-border-radius: 4px;
+            border-radius: 4px;
+            border: 1px solid #ffffff;
+            display: inline-block;
+            cursor: pointer;
+            color: #ffffff;
+            font-family: Arial;
+            font-size: 14px;
+            padding: 3px 15px;
+            text-decoration: none;
+            text-shadow: 0px 1px 0px #b23e35;
+            margin: 0px 5px;
+        }
+
+        .btn-h:hover {
+            background-color: #eb675e;
+        }
+
+        .btn-h:active {
+            position: relative;
+            top: 1px;
+        }
+
+        .btnSaveCookie {
+            -moz-box-shadow: inset 0px 39px 0px -24px #e67a73;
+            -webkit-box-shadow: inset 0px 39px 0px -24px #e67a73;
+            box-shadow: inset 0px 39px 0px -24px #e67a73;
+            background-color: #e4685d;
+            -moz-border-radius: 4px;
+            -webkit-border-radius: 4px;
+            border-radius: 4px;
+            border: 1px solid #ffffff;
+            display: inline-block;
+            cursor: pointer;
+            color: #ffffff;
+            font-family: Arial;
+            font-size: 15px;
+            padding: 6px 15px;
+            text-decoration: none;
+            text-shadow: 0px 1px 0px #b23e35;
+        }
+
+        .btnSaveCookie:hover {
+            background-color: #eb675e;
+        }
+
+        .btnSaveCookie:active {
+            position: relative;
+            top: 1px;
+        }
+
+
+        .row {
+            width: 100%;
+            float: left;
+            margin-bottom: 10px;
+        }
+
+        label {
+            font-size: 13px;
+            font-family: arial;
+            line-height: 1.5em;
+        }
+
+        .main {
+            width: 250px;
+            padding: 10px;
+            display: inline-block;
+        }
+
+        h4 {
+            font-size: 14px;
+            font-family: arial;
+            color: #DB4437;
+            border-bottom: solid 1px gainsboro;
+            padding-bottom: 6px;
+            margin: 0px 0px 10px 0;
+        }
+
+        .footer {
+            font-size: 12px;
+            width: 100%;
+            padding: 0px 10px 2px;
+            text-decoration: none;
+            background-color: #efefef;
+            border-top: solid 1px gainsboro;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+        }
+
+        .footer a {
+            margin-right: 10px;
+            text-decoration: none;
+            color: #999;
+        }
+
+        .footer a:hover {
+            color: #494949;
+        }
+
+        #list_cookie {
+            overflow: auto;
+            margin-top: 1px;
+        }
+
+        #list_cookie .cc {
+            font-size: 11px;
+            font-weight: bold;
+            background: #84aace;
+            padding: 5px;
+            position: relative;
+            cursor: pointer;
+            -webkit-border-radius: 6px;
+            -moz-border-radius: 6px;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            color: white;
+        }
+
+        #list_cookie .cc:hover {
+            background: #098cce;
+        }
+
+        #list_cookie .cc .delete {
+            background: #182203;
+            color: white;
+            width: 11px;
+            height: 14px;
+            display: none;
+            float: right;
+            text-align: center;
+            font-size: 10px;
+            cursor: pointer;
+            position: absolute;
+            right: 0;
+            top: 0;
+        }
+
+        #list_cookie .cc:hover .delete {
+            display: inline-block;
+        }
+
+        #list_cookie .cc .delete:hover {
+            background: #33e7d8;
+        }
+
+        #btncookielogout {
+            float: right;
+            padding: 3px;
+        }
+
+        .header {
+            float: left;
+            width: 100%;
+        }
+
+        textarea {
+            resize: none;
+        }
+
+        button {
+            outline: none;
+        }
+
+        .loading-example {
+            margin: auto;
+            border: 2px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 2px solid #0087FF;
+            border-bottom: 2px solid #FF6100;
+            width: 14px;
+            height: 14px;
+            -webkit-animation: spin 2s linear infinite;
+            animation: spin 2s linear infinite;
+            margin-bottom: 5px;
+            display: none;
+        }
+
+        @-webkit-keyframes spin {
+            0% {
+                -webkit-transform: rotate(0deg);
+            }
+
+            100% {
+                -webkit-transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .title-h {
+            width: 100%;
+            text-align: center;
+            font-family: sans-serif;
+            margin-top: 1px;
+            background: #64c306;
+            font-size: 12px;
+            color: #ffffff;
+            background-color: #64c306;
+            border-color: #64c306;
+            border: 0;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-sizing: border-box;
+        }
+
+        .autosave-c {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+        }
+
+        #list_cookie {
+            display: block;
+            width: 100%
+        }
+
+        .alert {}
+
+        .alert-error {
+            color: red;
+        }
+        .row-support a{
+            border: 1px solid;
+            border-radius: 4px;
+            padding: 3px 8px;
+        }
+    </style>
+    <script src="popup.js">
+    </script>
+</head>
+
+<body>
+    <div class="main">
+        <div class="row">
+            <label style="display:none;margin-bottom: 3px;" id="DivFbIdCurrent">
+                <input hidden type='text' id='CurrentFbId' value='' style="width: 120px;padding: 2px 2px 2px 5px;" />
+            </label>
+            <label style="display:block;margin-bottom: 3px;">Cookie :
+            </label>
+            <textarea id="cookieResult" rows="5" style="width:100%;word-break: break-all;"></textarea>
+            <div class="form-group mb-5" style="margin-bottom: 10px; margin-top: 5px">
+                <label style="display: flex; align-items: center; user-select: none"><input type="checkbox"
+                        style="margin-right: 10px" name="user-agent" /> User agent</label>
+            </div>
+            <label style="display:block;margin-bottom: 3px;">Token :
+            </label>
+            <p class="alert alert-error"></p>
+            <textarea id="tokenResult" rows="5" style="width:100%;word-break: break-all;"></textarea>
+            <textarea id="tokenResult2" rows="5" style="width:100%;word-break: break-all;"></textarea>
+            <p id="fb_id"></p>
+            <div class="loading-example"> </div>
+            <div class="group-btn">
+                <button id="btnImportCookie" type="button" class="btn btn-h">Import</button>
+                <button id="btnGetAccessToken" type="button" class="btn btn-h">Get</button>
+            </div>
+        </div>
+        <img id="QRCode" style="width:100%;float:left;margin-bottom:5px;display:none;" />
+        <div class="row">
+            <button id="btncookielogout" type="button" style="" class="btn btnLoginNew">Login new Facebook</button>
+        </div>
+        <div id="list_cookie"></div>
+        <!-- <img src="/images/download.png" style="width: 24px;margin-right: 5px;vertical-align: bottom;"></a>
+		<a title="Download all cookie file" href="javascript:void(0)" id='btnDownloadCookie' style="color: #206eab;">
+            Download all cookie file
+        </a> -->
+    </div>
+    <div class="footer">
+        <div class='' style="padding: 5px 5px 5px 10px;">
+            <div class="row-support" style="display: flex; justify-content: center; gap: 10px;margin-top: 5px;margin-bottom: 5px;">
+                <a style="color: #3954a4;font-weight: 600;font-size: 13px;" href="https://www.facebook.com/jonny.okyo/" target="_blank">Support</a>
+                <a style="color: #e5372c;font-weight: 600;font-size: 13px;" href="https://www.paypal.com/paypalme/jonnyOxt" target="_blank">Donate</a>
+            </div>
+            <h3 style="line-height: 24px;color:#9e8d52;text-align: center;margin-top: 0px;margin-bottom: 5px;">
+                <a href="https://chromewebstore.google.com/detail/get-token-cookie/naciaagbkifhpnoodlkhbejjldaiffcm" target="blank">Get Cookie Token</a>
+            </h3>
+        </div>
+    </div>
+</body>
+
+</html>
